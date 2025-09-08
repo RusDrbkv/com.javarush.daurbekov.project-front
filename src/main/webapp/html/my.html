@@ -1,11 +1,469 @@
 <html>
 <head>
-    <title>RPG</title>
-    <script src=https://code.jquery.com/jquery-3.6.0.min.js></script>
+    <title>RPG Admin Panel</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="/css/my.css" rel="stylesheet">
 </head>
 <body>
-<h1>RPG admin panel</h1>
+    <div class="container">
+        <h1>RPG Admin Panel</h1>
+        
+        <!-- Players Table -->
+        <div class="table-container">
+            <table id="playersTable">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Name</th>
+                        <th>Title</th>
+                        <th>Race</th>
+                        <th>Profession</th>
+                        <th>Level</th>
+                        <th>Birthday</th>
+                        <th>Banned</th>
+                        <th>Edit</th>
+                        <th>Delete</th>
+                    </tr>
+                </thead>
+                <tbody id="playersTableBody">
+                </tbody>
+            </table>
+        </div>
 
+        <!-- Pagination Controls -->
+        <div class="pagination-container">
+            <div class="pagination-controls">
+                <label for="pageSize">Players per page:</label>
+                <select id="pageSize">
+                    <option value="3">3</option>
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="20">20</option>
+                </select>
+            </div>
+            <div id="pagination" class="pagination">
+                <!-- Pagination buttons will be generated here -->
+            </div>
+        </div>
+
+        <hr class="divider">
+
+        <!-- Create New Player Section -->
+        <div class="create-section">
+            <h2>Create New Player</h2>
+            <form id="createPlayerForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newName">Name (1-12 chars):</label>
+                        <input type="text" id="newName" maxlength="12" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newTitle">Title (1-30 chars):</label>
+                        <input type="text" id="newTitle" maxlength="30" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newRace">Race:</label>
+                        <select id="newRace" required>
+                            <option value="">Select Race</option>
+                            <option value="HUMAN">HUMAN</option>
+                            <option value="DWARF">DWARF</option>
+                            <option value="ELF">ELF</option>
+                            <option value="GIANT">GIANT</option>
+                            <option value="ORC">ORC</option>
+                            <option value="TROLL">TROLL</option>
+                            <option value="HOBBIT">HOBBIT</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="newProfession">Profession:</label>
+                        <select id="newProfession" required>
+                            <option value="">Select Profession</option>
+                            <option value="WARRIOR">WARRIOR</option>
+                            <option value="ROGUE">ROGUE</option>
+                            <option value="SORCERER">SORCERER</option>
+                            <option value="CLERIC">CLERIC</option>
+                            <option value="PALADIN">PALADIN</option>
+                            <option value="NAZGUL">NAZGUL</option>
+                            <option value="WARLOCK">WARLOCK</option>
+                            <option value="DRUID">DRUID</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newLevel">Level (0-100):</label>
+                        <input type="number" id="newLevel" min="0" max="100" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newBirthday">Birthday:</label>
+                        <input type="date" id="newBirthday" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newBanned">Banned:</label>
+                        <input type="checkbox" id="newBanned">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Create Player</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 0;
+        let pageSize = 10;
+        let totalPages = 0;
+
+        // Load players on page load
+        $(document).ready(function() {
+            loadPlayersCount();
+            loadPlayers();
+            
+            // Page size change handler
+            $('#pageSize').change(function() {
+                pageSize = parseInt($(this).val());
+                currentPage = 0;
+                loadPlayers();
+            });
+            
+            // Create player form handler
+            $('#createPlayerForm').submit(function(e) {
+                e.preventDefault();
+                createPlayer();
+            });
+        });
+
+        // Load total players count
+        function loadPlayersCount() {
+            $.ajax({
+                url: '/rest/players/count',
+                method: 'GET',
+                success: function(count) {
+                    totalPages = Math.ceil(count / pageSize);
+                    updatePagination();
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error loading players count:', error);
+                }
+            });
+        }
+
+        // Load players for current page
+        function loadPlayers() {
+            // Show loading indicator
+            $('#playersTableBody').html('<tr><td colspan="10" style="text-align: center; padding: 20px;"><div class="loading"></div> Loading players...</td></tr>');
+            
+            $.ajax({
+                url: '/rest/players',
+                method: 'GET',
+                data: {
+                    pageNumber: currentPage,
+                    pageSize: pageSize
+                },
+                success: function(players) {
+                    displayPlayers(players);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error loading players:', error);
+                    $('#playersTableBody').html('<tr><td colspan="10" style="text-align: center; padding: 20px; color: red;">Error loading players. Please try again.</td></tr>');
+                    showMessage('Error loading players: ' + error, 'error');
+                }
+            });
+        }
+
+        // Display players in table
+        function displayPlayers(players) {
+            const tbody = $('#playersTableBody');
+            tbody.empty();
+            
+            players.forEach(function(player) {
+                const birthday = new Date(player.birthday).toLocaleDateString();
+                const row = `
+                    <tr data-id="${player.id}">
+                        <td>${player.id}</td>
+                        <td><span class="editable" data-field="name">${player.name}</span></td>
+                        <td><span class="editable" data-field="title">${player.title}</span></td>
+                        <td>
+                            <span class="editable" data-field="race">${player.race}</span>
+                        </td>
+                        <td>
+                            <span class="editable" data-field="profession">${player.profession}</span>
+                        </td>
+                        <td>${player.level}</td>
+                        <td>${birthday}</td>
+                        <td>
+                            <span class="editable" data-field="banned">${player.banned ? 'Yes' : 'No'}</span>
+                        </td>
+                        <td>
+                            <img src="/img/edit.png" class="action-btn edit-btn" onclick="editPlayer(${player.id})" alt="Edit">
+                            <img src="/img/save.png" class="action-btn save-btn" onclick="savePlayer(${player.id})" alt="Save" style="display: none;">
+                        </td>
+                        <td>
+                            <img src="/img/delete.png" class="action-btn delete-btn" onclick="deletePlayer(${player.id})" alt="Delete">
+                        </td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+        }
+
+        // Update pagination controls
+        function updatePagination() {
+            const pagination = $('#pagination');
+            pagination.empty();
+            
+            // Previous button
+            if (currentPage > 0) {
+                pagination.append(`<button class="page-btn" onclick="goToPage(${currentPage - 1})">Previous</button>`);
+            }
+            
+            // Page numbers
+            for (let i = 0; i < totalPages; i++) {
+                const activeClass = i === currentPage ? 'active' : '';
+                pagination.append(`<button class="page-btn ${activeClass}" onclick="goToPage(${i})">${i + 1}</button>`);
+            }
+            
+            // Next button
+            if (currentPage < totalPages - 1) {
+                pagination.append(`<button class="page-btn" onclick="goToPage(${currentPage + 1})">Next</button>`);
+            }
+        }
+
+        // Go to specific page
+        function goToPage(page) {
+            currentPage = page;
+            loadPlayers();
+        }
+
+        // Edit player
+        function editPlayer(playerId) {
+            const row = $(`tr[data-id="${playerId}"]`);
+            const editBtn = row.find('.edit-btn');
+            const saveBtn = row.find('.save-btn');
+            const deleteBtn = row.find('.delete-btn');
+            
+            // Hide edit button, show save button, hide delete button
+            editBtn.hide();
+            saveBtn.show();
+            deleteBtn.hide();
+            
+            // Make fields editable
+            row.find('.editable').each(function() {
+                const field = $(this);
+                const fieldName = field.data('field');
+                const currentValue = field.text();
+                
+                if (fieldName === 'race' || fieldName === 'profession') {
+                    // Create dropdown for race/profession
+                    const options = fieldName === 'race' ? 
+                        ['HUMAN', 'DWARF', 'ELF', 'GIANT', 'ORC', 'TROLL', 'HOBBIT'] :
+                        ['WARRIOR', 'ROGUE', 'SORCERER', 'CLERIC', 'PALADIN', 'NAZGUL', 'WARLOCK', 'DRUID'];
+                    
+                    let selectHtml = `<select class="edit-field" data-field="${fieldName}">`;
+                    options.forEach(option => {
+                        const selected = option === currentValue ? 'selected' : '';
+                        selectHtml += `<option value="${option}" ${selected}>${option}</option>`;
+                    });
+                    selectHtml += '</select>';
+                    
+                    field.html(selectHtml);
+                } else if (fieldName === 'banned') {
+                    // Create checkbox for banned
+                    const checked = currentValue === 'Yes' ? 'checked' : '';
+                    field.html(`<input type="checkbox" class="edit-field" data-field="${fieldName}" ${checked}>`);
+                } else {
+                    // Create text input for name/title
+                    field.html(`<input type="text" class="edit-field" data-field="${fieldName}" value="${currentValue}">`);
+                }
+            });
+        }
+
+        // Save player
+        function savePlayer(playerId) {
+            const row = $(`tr[data-id="${playerId}"]`);
+            const editBtn = row.find('.edit-btn');
+            const saveBtn = row.find('.save-btn');
+            const deleteBtn = row.find('.delete-btn');
+            
+            // Collect updated data
+            const updateData = {};
+            let isValid = true;
+            
+            row.find('.edit-field').each(function() {
+                const field = $(this);
+                const fieldName = field.data('field');
+                let value = field.val();
+                
+                if (fieldName === 'banned') {
+                    value = field.is(':checked');
+                } else if (fieldName === 'name') {
+                    value = value.trim();
+                    if (value.length === 0 || value.length > 12) {
+                        alert('Name must be between 1 and 12 characters');
+                        isValid = false;
+                        return false;
+                    }
+                } else if (fieldName === 'title') {
+                    value = value.trim();
+                    if (value.length === 0 || value.length > 30) {
+                        alert('Title must be between 1 and 30 characters');
+                        isValid = false;
+                        return false;
+                    }
+                }
+                
+                updateData[fieldName] = value;
+            });
+            
+            if (!isValid) {
+                return;
+            }
+            
+            // Send update request
+            $.ajax({
+                url: `/rest/players/${playerId}`,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(updateData),
+                success: function(response) {
+                    // Show edit button, hide save button, show delete button
+                    editBtn.show();
+                    saveBtn.hide();
+                    deleteBtn.show();
+                    
+                    // Reload current page
+                    loadPlayers();
+                    
+                    // Show success message
+                    showMessage('Player updated successfully!', 'success');
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error updating player:', error);
+                    let errorMessage = 'Error updating player: ' + error;
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMessage = xhr.responseJSON.message;
+                    }
+                    showMessage(errorMessage, 'error');
+                }
+            });
+        }
+
+        // Delete player
+        function deletePlayer(playerId) {
+            if (confirm('Are you sure you want to delete this player?')) {
+                $.ajax({
+                    url: `/rest/players/${playerId}`,
+                    method: 'DELETE',
+                    success: function() {
+                        loadPlayersCount();
+                        loadPlayers();
+                        showMessage('Player deleted successfully!', 'success');
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error deleting player:', error);
+                        let errorMessage = 'Error deleting player: ' + error;
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        }
+                        showMessage(errorMessage, 'error');
+                    }
+                });
+            }
+        }
+
+        // Create new player
+        function createPlayer() {
+            // Validate form data
+            const name = $('#newName').val().trim();
+            const title = $('#newTitle').val().trim();
+            const race = $('#newRace').val();
+            const profession = $('#newProfession').val();
+            const level = parseInt($('#newLevel').val());
+            const birthday = $('#newBirthday').val();
+            
+            // Validation
+            if (!name || name.length === 0 || name.length > 12) {
+                alert('Name must be between 1 and 12 characters');
+                return;
+            }
+            
+            if (!title || title.length === 0 || title.length > 30) {
+                alert('Title must be between 1 and 30 characters');
+                return;
+            }
+            
+            if (!race) {
+                alert('Please select a race');
+                return;
+            }
+            
+            if (!profession) {
+                alert('Please select a profession');
+                return;
+            }
+            
+            if (isNaN(level) || level < 0 || level > 100) {
+                alert('Level must be between 0 and 100');
+                return;
+            }
+            
+            if (!birthday) {
+                alert('Please select a birthday');
+                return;
+            }
+            
+            const formData = {
+                name: name,
+                title: title,
+                race: race,
+                profession: profession,
+                level: level,
+                birthday: new Date(birthday).getTime(),
+                banned: $('#newBanned').is(':checked')
+            };
+            
+            $.ajax({
+                url: '/rest/players',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(formData),
+                success: function(response) {
+                    // Clear form
+                    $('#createPlayerForm')[0].reset();
+                    
+                    // Reload data
+                    loadPlayersCount();
+                    loadPlayers();
+                    
+                    // Show success message
+                    showMessage('Player created successfully!', 'success');
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error creating player:', error);
+                    let errorMessage = 'Error creating player: ' + error;
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMessage = xhr.responseJSON.message;
+                    }
+                    showMessage(errorMessage, 'error');
+                }
+            });
+        }
+        
+        // Show message to user
+        function showMessage(message, type) {
+            const messageDiv = $('<div class="message ' + type + '">' + message + '</div>');
+            $('body').prepend(messageDiv);
+            
+            setTimeout(function() {
+                messageDiv.fadeOut(function() {
+                    messageDiv.remove();
+                });
+            }, 3000);
+        }
+    </script>
 </body>
 </html>
+
